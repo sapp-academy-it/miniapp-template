@@ -1,0 +1,58 @@
+name: Deploy Pages
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  # Chạy cả khi mở pull request: chặn lỗi kiểu, lỗi build và vi phạm an toàn TRƯỚC khi mã vào main.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # check-app so sánh với nhánh đích để biết file nào bị sửa
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Kiểm tra kiểu và build
+        run: npm run build
+      - name: Kiểm tra phạm vi sửa, import, CSP
+        run: npm run check
+      - name: Tự kiểm tra bộ khung (chỉ chạy ở repo template)
+        if: github.repository == 'sapp-academy-it/miniapp-template'
+        run: npm test
+  # Chỉ đăng khi mã đã vào main và kiểm tra xanh. Kiểm tra lỗi thì trang đang chạy giữ nguyên bản cũ.
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.repository != 'sapp-academy-it/miniapp-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

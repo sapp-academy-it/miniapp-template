@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Biến màu của shadcn, ánh xạ sang token SAPP (HSL không có dấu phẩy) */
+@layer base {
+  :root {
+    --background: 0 0% 100%;            /* #FFFFFF */
+    --foreground: 0 0% 25%;             /* #404040 ink-800 */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 25%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 25%;
+    --primary: 37 96% 61%;              /* #FBB03B amber-500 */
+    --primary-foreground: 0 0% 17%;     /* #2C2C2C chữ trên nền amber */
+    --secondary: 0 0% 97%;              /* #F7F7F7 */
+    --secondary-foreground: 0 0% 25%;
+    --muted: 0 0% 97%;
+    --muted-foreground: 0 0% 40%;       /* #666666 */
+    --accent: 38 100% 96%;              /* #FFF8EC amber-50 */
+    --accent-foreground: 0 0% 17%;
+    --destructive: 0 63% 56%;           /* #D64545 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;                 /* #E5E5E5 */
+    --input: 0 0% 81%;                  /* #CFCFCF */
+    --ring: 37 95% 55%;                 /* #F9A420 */
+  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground font-sans antialiased; }
+}
