@@ -14,14 +14,14 @@ Chỉ hai thứ thuộc về một app, và là thứ duy nhất trợ lý đư�
 `src/lib/ops.ts` không chứa kiến thức riêng về endpoint nào: màn hình nhận `ops` qua props và truyền đường dẫn theo tài liệu API trực tuyến. `ops.list(path, params?)` lấy đủ mọi trang của endpoint có `page_index`/`page_size` và tự nhận mảng dữ liệu (thuộc tính mảng duy nhất của `data`, báo lỗi nếu có nhiều mảng); `ops.get(path)` trả về `data`. Client lo đăng nhập, gắn token, đổi token một lần khi hết hạn. Không có chế độ dữ liệu mẫu: dữ liệu mẫu chỉ có trong artifact xem trước.
 
 ## Môi trường OPS
-Đổi ở `app/app.config.ts` (`env`: `dev`, `uat`, `prod`). Địa chỉ gọi API và `connect-src` của CSP tự khớp (plugin trong `vite.config.ts`). Ba nơi giữ bảng địa chỉ: `src/lib/ops.ts`, `vite.config.ts`, `scripts/check-app.mjs`. Đổi một nơi thì sửa cả ba.
+Đổi ở `app/app.config.ts` (`env`: `dev`, `uat`, `prod`). Địa chỉ gọi API và `connect-src` của CSP tự khớp (plugin trong `vite.config.ts`). Hai nơi giữ bảng địa chỉ: `src/lib/ops.ts` và `vite.config.ts`. Đổi một nơi thì sửa cả hai.
 
 ## Lệnh
-- `npm ci`, `npm run build` (tsc + vite build), `npm run check` (check-app), `npm test` (kiểm thử check-app và client OPS).
-- `.github/workflows/pages.yml`: job `check` (build, check-app) chạy trên pull request và `main`; job `deploy` chỉ chạy ở repo của app, sau khi vào `main`.
+- `npm ci`, `npm run build` (tsc + vite build), `npm run lint` (ESLint cho `app/**`), `npm test` (kiểm thử client OPS).
+- `.github/workflows/pages.yml`: job `check` (build, lint) chạy trên pull request và `main`; job `deploy` chỉ chạy ở repo của app, sau khi vào `main`.
 
-## `check-app`
-Chỉ cho sửa `app/**` và `README.md`; import theo danh sách cho phép; cấm `dangerouslySetInnerHTML`, `fetch`, lưu trong trình duyệt, địa chỉ lạ; **mọi đường dẫn viết cứng trong `ops.list/ops.get` phải là endpoint GET có trong tài liệu API trực tuyến** (`/api/v1/miniapp-docs-json` của môi trường, production dùng tài liệu của UAT; không tải được thì chỉ cảnh báo); kiểm tra CSP của bản build. Đây là lưới chặn lỗi vô ý, không chặn được người cố tình sửa chính script (cần người duyệt PR).
+## Lint (`eslint.config.js`)
+Chỉ áp cho mã của app (`app/**`): import chỉ từ thư viện có trong `dependencies`, `"/components/ui/<tên>"` và `"/lib/utils"` (không import tương đối, không `@/`); cấm `fetch`, `XMLHttpRequest`, `WebSocket`, `localStorage`, cookie, `innerHTML`, `dangerouslySetInnerHTML`, `eval`, import động, thẻ `script`/`iframe`; cấm chữ `TODO` và `PREVIEW-ONLY` trong chú thích. Import gói chưa cài thì `tsc` (trong `npm run build`) báo. **Không có gì chặn việc sửa file ngoài `app/`**: quy tắc "chỉ sửa `app/` và `README.md`" là chỉ dẫn trong skill cho agent, cần người duyệt PR nếu muốn chặn thật.
 
 ## CSP
 `script-src 'self'` (không cho script viết trong trang), `connect-src` chỉ một địa chỉ OPS, `style-src 'self' 'unsafe-inline'`. Cho phép style viết trong trang vì Radix và `react-remove-scroll` tự chèn thẻ `<style>` có nội dung đổi theo độ rộng thanh cuộn của từng trình duyệt, không băm trước được.

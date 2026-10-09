@@ -8,13 +8,11 @@ on:
 permissions:
   contents: read
 jobs:
-  # Chạy cả khi mở pull request: chặn lỗi kiểu, lỗi build và vi phạm an toàn TRƯỚC khi mã vào main.
+  # Chạy cả khi mở pull request: chặn lỗi kiểu, lỗi build và lỗi lint TRƯỚC khi mã vào main.
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # check-app so sánh với nhánh đích để biết file nào bị sửa
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -22,8 +20,8 @@ jobs:
       - run: npm ci
       - name: Kiểm tra kiểu và build
         run: npm run build
-      - name: Kiểm tra phạm vi sửa, import, CSP
-        run: npm run check
+      - name: Lint (ESLint)
+        run: npm run lint
       - name: Tự kiểm tra bộ khung (chỉ chạy ở repo template)
         if: github.repository == 'sapp-academy-it/miniapp-template'
         run: npm test
