@@ -10,7 +10,7 @@ const levelOf = (c: any): string | null => c.course?.subject?.name?.match(/Level
 
 type Props = {
   ops: {
-    list: (path: string, key: string, params?: Record<string, string>) => Promise<any[]>
+    list: (path: string, params?: Record<string, string>) => Promise<any[]>
     get: (path: string) => Promise<any>
   }
   fmt: {
@@ -32,8 +32,8 @@ function ScheduleScreen({ ops, fmt, navigate }: Props) {
   const load = () => {
     setLoading(true); setError("")
     Promise.all([
-      ops.list("/classes", "classes", { status: "PUBLIC" }),
-      ops.list("/facilities", "facilities", { status: "ACTIVE" }),
+      ops.list("/classes", { status: "PUBLIC" }),
+      ops.list("/facilities", { status: "ACTIVE" }),
     ]).then(([cls, fac]) => {
       setProvince(Object.fromEntries(fac.map((f) => [f.id, f.ward?.province?.name ?? ""])))
       // Lớp sắp khai giảng: lọc ở trình duyệt vì fromDate/toDate của API lọc theo ngày cập nhật

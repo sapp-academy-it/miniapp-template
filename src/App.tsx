@@ -1,6 +1,6 @@
 import { useState, type ComponentType } from 'react'
 import { LogOut } from 'lucide-react'
-import { ops, session, IS_PREVIEW } from '@/lib/ops'
+import { ops, session } from '@/lib/ops'
 import { fmt } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -26,14 +26,6 @@ export default function App() {
   const Current = screens[view.name]
   return (
     <div className="container py-6">
-      {IS_PREVIEW && (
-        <div className="mb-4 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm">
-          Bản xem trước: {ops.isDemo ? 'đang dùng DỮ LIỆU MẪU.' : 'đang gọi API thật.'}{' '}
-          <Button variant="outline" size="sm" onClick={() => { session.setDemo(!ops.isDemo); navigate('login') }}>
-            {ops.isDemo ? 'Thử gọi API thật' : 'Quay lại dữ liệu mẫu'}
-          </Button>
-        </div>
-      )}
       <header className="flex flex-wrap items-center justify-between gap-4 pb-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-amber-800">SAPP Academy · Nội bộ</p>

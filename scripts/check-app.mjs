@@ -2,6 +2,8 @@
 // Chạy trong workflow (job "check") sau tsc và build. Lỗi thì workflow dừng, trang đang chạy giữ nguyên bản cũ.
 // Đây là lưới chặn lỗi vô ý của trợ lý, không chặn được người cố tình sửa chính file này (cần người duyệt PR để chặn).
 // Dùng: node scripts/check-app.mjs [thư mục gốc repo]. Danh sách file đổi lấy từ biến CHANGED_FILES hoặc git diff với nhánh đích của PR.
+// Đường dẫn trong ops.list/ops.get được đối chiếu với tài liệu API trực tuyến (công khai, không cần đăng nhập). Không tải được tài liệu thì chỉ cảnh báo.
+// Biến thử nghiệm: OPS_DOCS_JSON (đường dẫn file tài liệu), OPS_DOCS_URL (địa chỉ tài liệu).
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -10,7 +12,9 @@ const ROOT = process.argv[2] ?? '.'
 const OPS_HOSTS = ['dev-ops-be.sapp.edu.vn', 'uat-ops-be.sapp.edu.vn', 'ops-be.sapp.edu.vn']
 const OK_HOSTS = [...OPS_HOSTS, 'sapp-academy-it.github.io', 'sapp.edu.vn', 'www.sapp.edu.vn', 'www.w3.org']
 const ENVS = ['dev', 'uat', 'prod']
+const DOCS_HOST = { dev: 'dev-ops-be.sapp.edu.vn', uat: 'uat-ops-be.sapp.edu.vn', prod: 'uat-ops-be.sapp.edu.vn' } // production không có tài liệu, dùng của UAT
 const errors = []
+const warnings = []
 const fail = (file, message) => errors.push(`${file}: ${message}`)
 
 const BANNED = [
@@ -82,11 +86,12 @@ for (const f of appFiles.filter((x) => /\.tsx?$/.test(x))) {
 }
 
 // ---- 4) app.config.ts: tên màn, môi trường (đọc bằng bộ biên dịch TypeScript của chính repo)
+let config
 if (existsSync(join(ROOT, 'app/app.config.ts'))) {
   try {
     const ts = (await import('typescript')).default
     const js = ts.transpileModule(readFileSync(join(ROOT, 'app/app.config.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText
-    const config = (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)).default
+    config = (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)).default
     if (typeof config?.title !== 'string' || !config.title.trim()) fail('app/app.config.ts', 'thiếu title')
     if (!ENVS.includes(config?.env)) fail('app/app.config.ts', `env phải là một trong: ${ENVS.join(', ')}`)
     if (!screens.includes(config?.home)) fail('app/app.config.ts', `home "${config?.home}" không có file app/screens/${config?.home}.tsx`)
@@ -99,7 +104,29 @@ if (existsSync(join(ROOT, 'app/app.config.ts'))) {
   }
 } else fail('app/app.config.ts', 'thiếu file')
 
-// ---- 5) Bản build: CSP phải chặt và chỉ gọi OPS
+// ---- 5) Đường dẫn trong ops.list/ops.get phải có trong tài liệu API trực tuyến (chỉ GET). Đường dẫn ghép bằng ${...} thì bỏ qua.
+const literalCalls = []
+for (const f of appFiles.filter((x) => /\.tsx?$/.test(x))) {
+  const code = readFileSync(join(ROOT, f), 'utf8')
+  for (const m of code.matchAll(/\bops\s*\.\s*(list|get)\s*\(\s*(["'`])((?:(?!\2)[^\\$])*)\2/g)) literalCalls.push({ f, path: m[3].split('?')[0] })
+}
+if (literalCalls.length) {
+  try {
+    const docUrl = process.env.OPS_DOCS_URL ?? `https://${DOCS_HOST[config?.env] ?? DOCS_HOST.uat}/api/v1/miniapp-docs-json`
+    const doc = process.env.OPS_DOCS_JSON ? JSON.parse(readFileSync(process.env.OPS_DOCS_JSON, 'utf8'))
+      : await fetch(docUrl, { signal: AbortSignal.timeout(10000) }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+    const getPaths = Object.entries(doc.paths ?? {}).filter(([, item]) => item.get).map(([p]) => p.replace(/^\/api\/v\d+/, ''))
+    if (!getPaths.length) throw new Error('tài liệu không có đường dẫn GET nào')
+    const matchers = getPaths.map((p) => new RegExp('^' + p.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{[^}]+\}/g, '[^/]+') + '$'))
+    for (const { f, path } of literalCalls) {
+      if (!matchers.some((re) => re.test(path))) fail(f, `endpoint "${path}" không có trong tài liệu API (chỉ GET). Đọc lại tài liệu API trực tuyến, đừng đoán đường dẫn`)
+    }
+  } catch (error) {
+    warnings.push(`không tải được tài liệu API (${error.message}): bỏ qua bước đối chiếu endpoint`)
+  }
+}
+
+// ---- 6) Bản build: CSP phải chặt và chỉ gọi OPS
 const distHtml = join(ROOT, 'dist/index.html')
 if (existsSync(distHtml)) {
   const html = readFileSync(distHtml, 'utf8')
@@ -119,9 +146,10 @@ if (existsSync(distHtml)) {
   if (/<script[^>]+src=["']https?:/i.test(html)) fail('dist/index.html', 'có script nạp từ địa chỉ ngoài')
 }
 
+for (const w of warnings) console.log(`::warning::${w}`)
 if (errors.length) {
   for (const e of errors) console.log(`::error::${e}`)
   console.log(`\nKHÔNG ĐẠT: ${errors.length} vấn đề. Trang đang chạy được giữ nguyên bản cũ.`)
   process.exit(1)
 }
-console.log('ĐẠT: phạm vi sửa, import, cách viết bị cấm, cấu hình app và CSP của bản build.')
+console.log('ĐẠT: phạm vi sửa, import, cách viết bị cấm, endpoint theo tài liệu API, cấu hình app và CSP của bản build.')

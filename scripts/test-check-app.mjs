@@ -14,6 +14,9 @@ export default function Home({ ops, fmt, navigate }: any) {
   return <Button onClick={() => setN(n + 1)}>{fmt.date(null)} {n}</Button>
 }
 `
+// Tài liệu API giả (bản thử không gọi mạng): có /alpha và /things/{id} (GET), /auth/login chỉ POST
+const DOCS = join(mkdtempSync(join(tmpdir(), 'check-docs-')), 'docs.json')
+writeFileSync(DOCS, JSON.stringify({ paths: { '/api/v1/alpha': { get: {} }, '/api/v1/things/{id}': { get: {} }, '/api/v1/auth/login': { post: {} } } }))
 const CSP = (connect, script = "'self'", style = "'self' 'unsafe-inline'") => `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${script}; style-src ${style}; connect-src ${connect}; base-uri 'none'">`
 
 function fixture(mutate) {
@@ -25,13 +28,13 @@ function fixture(mutate) {
   writeFileSync(join(dir, 'app/app.config.ts'), `export default { title: 'Thử', env: 'uat' as 'dev' | 'uat' | 'prod', home: 'home', tabs: [] as [string, string][] }\n`)
   mkdirSync(join(dir, 'dist'), { recursive: true })
   writeFileSync(join(dir, 'dist/index.html'), `<!doctype html><html><head>${CSP('https://uat-ops-be.sapp.edu.vn')}</head><body></body></html>`)
-  const env = { changed: 'app/screens/home.tsx\napp/app.config.ts' }
+  const env = { changed: 'app/screens/home.tsx\napp/app.config.ts', extra: {} }
   mutate?.(dir, env, { write: (rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), text) } })
   return { dir, env }
 }
 
 function run({ dir, env }) {
-  const result = spawnSync(process.execPath, [script, dir], { encoding: 'utf8', env: { ...process.env, CHANGED_FILES: env.changed } })
+  const result = spawnSync(process.execPath, [script, dir], { encoding: 'utf8', env: { ...process.env, CHANGED_FILES: env.changed, OPS_DOCS_JSON: DOCS, ...env.extra } })
   rmSync(dir, { recursive: true, force: true })
   return { status: result.status, out: result.stdout + result.stderr }
 }
@@ -63,13 +66,19 @@ const cases = [
   ['CSP script unsafe-inline', (d, e, { write }) => write('dist/index.html', `<html><head>${CSP('https://uat-ops-be.sapp.edu.vn', "'self' 'unsafe-inline'")}</head></html>`), "script-src phải đúng"],
   ['CSP connect lạ', (d, e, { write }) => write('dist/index.html', `<html><head>${CSP('https://evil.example.com')}</head></html>`), 'không phải OPS'],
   ['CSP style-src dùng *', (d, e, { write }) => write('dist/index.html', `<html><head>${CSP('https://uat-ops-be.sapp.edu.vn', "'self'", "'self' *")}</head></html>`), 'dùng ký tự *'],
+  ['endpoint có trong tài liệu', screen(GOOD_SCREEN + 'const a = (ops: any) => ops.list("/alpha", { status: "ACTIVE" })\n'), null],
+  ['endpoint có tham số trong đường dẫn', screen(GOOD_SCREEN + 'const a = (ops: any) => ops.get("/things/5")\n'), null],
+  ['đường dẫn ghép bằng ${} được bỏ qua', screen(GOOD_SCREEN + 'const a = (ops: any, id: string) => ops.get(`/khong-co/${id}`)\n'), null],
+  ['endpoint không có trong tài liệu', screen(GOOD_SCREEN + 'const a = (ops: any) => ops.list("/khong-co")\n'), 'endpoint "/khong-co" không có trong tài liệu API'],
+  ['endpoint chỉ có POST', screen(GOOD_SCREEN + 'const a = (ops: any) => ops.get("/auth/login")\n'), 'endpoint "/auth/login" không có trong tài liệu API'],
+  ['không tải được tài liệu thì chỉ cảnh báo', (d, e, { write }) => { write('app/screens/home.tsx', GOOD_SCREEN + 'const a = (ops: any) => ops.list("/khong-co")\n'); e.extra = { OPS_DOCS_JSON: '', OPS_DOCS_URL: 'http://127.0.0.1:9/khong-co' } }, null, 'không tải được tài liệu API'],
   ['CSP thiếu', (d, e, { write }) => write('dist/index.html', '<html><head></head></html>'), 'thiếu thẻ Content-Security-Policy'],
 ]
 
 let bad = 0
-for (const [name, mutate, expected] of cases) {
+for (const [name, mutate, expected, alsoExpect] of cases) {
   const { status, out } = run(fixture(mutate))
-  const ok = expected === null ? status === 0 : status === 1 && out.includes(expected)
+  const ok = (expected === null ? status === 0 : status === 1 && out.includes(expected)) && (!alsoExpect || out.includes(alsoExpect))
   if (!ok) { bad++; console.log(`LỖI: "${name}" ${expected === null ? 'lẽ ra phải đạt' : `lẽ ra phải báo "${expected}"`}\n${out}`) }
 }
 if (bad) { console.log(`KHÔNG ĐẠT: ${bad}/${cases.length} ca sai`); process.exit(1) }
