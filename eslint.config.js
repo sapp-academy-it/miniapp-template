@@ -1,7 +1,7 @@
 // Lint cho mã của app (app/**). Quy tắc an toàn: không gọi mạng trực tiếp, không chèn HTML, không lưu dữ liệu trong trình duyệt,
 // chỉ import từ thư viện đã cài và từ "/components/ui/<tên>", "/lib/utils".
 import tseslint from 'typescript-eslint'
-import importPlugin from 'eslint-plugin-import'
+import * as importX from 'eslint-plugin-import-x'
 
 const syntax = (selector, message) => ({ selector, message })
 
@@ -10,10 +10,10 @@ export default tseslint.config(
   {
     files: ['app/**/*.{ts,tsx}'],
     extends: [tseslint.configs.base],
-    plugins: { import: importPlugin },
+    plugins: { 'import-x': importX },
     languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
     rules: {
-      'import/no-extraneous-dependencies': ['error', { devDependencies: false, optionalDependencies: false }],
+      'import-x/no-extraneous-dependencies': ['error', { devDependencies: false, optionalDependencies: false }],
       'no-restricted-imports': ['error', { patterns: [
         { regex: '^\\.', message: 'Mỗi màn hình phải tự chứa, không import file khác.' },
         { regex: '^@/', message: 'Chỉ dùng "/components/ui/<tên>" và "/lib/utils".' },
